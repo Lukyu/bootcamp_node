@@ -1,7 +1,7 @@
 //REQUIRES
 const express           = require("express");
 const cors              = require("cors");
-const { v4, validate }  = require("uuid");
+const { uuid, isUuid }  = require("uuidv4");
 
 //APP
 const app = express();
@@ -10,7 +10,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(logRegister);
-app.use("/repositories/:id", validadeInvalidID);
 
 //LOG REGISTER FUNCTIONS MIDDLEWARE
 function logRegister(request, respose, next) {
@@ -19,40 +18,18 @@ function logRegister(request, respose, next) {
   //Build string with request infos
   const requestInfo = `[${method.toUpperCase()}] ${url}`;
 
-  //Perform the next action and record the execution time
+  //Execute next action and register execution time
   console.time(requestInfo);
     next();
   console.timeEnd(requestInfo);
 }
-
-function validadeInvalidID(request, response, next) {
-  const { id } = request.params;
-
-  if(!validate(id))
-    return response.status(400).json({error: true, message: "Invalid repository ID."});
-  
-  next();
-} 
 
 //Repositories :)
 const repositories = [];
 
 //[GET] [LIST] Repositories
 app.get("/repositories", (request, response) => {
-  const { title, id } = request.query;
-
-  //if uuid was sent we will validate it
-  if(id && !validate(id))
-    return response.status(400).json({error: true, message: "Invalid repository ID."});
-
-  //and now let's search for repositories filtering by id OR title
-  const results = id 
-    ? repositories.filter(repository => repository.id == id) 
-    : (title) 
-      ? repositories.filter(repository => repository.title.includes(title)) 
-      : repositories;
-  
-  return response.status(200).json(results);
+  return response.json(repositories);
 });
 
 //[POST] [INSERT] Repository
@@ -61,20 +38,16 @@ app.post("/repositories", (request, response) => {
 
   //New repository object
   const newRepository = {
-    "id": v4(),
+    "id": uuid(),
     title,
     url,
     "likes": 0,
     techs
   };
 
-  //Validates if the url is in use
-  if(repositories.findIndex(repository => repository.url == url) > -1)
-    return response.status(400).json({error: true, message: "The requested url is already in use"});
-
   repositories.push(newRepository);
 
-  return response.status(200).json(newRepository);
+  return response.json(newRepository);
 });
 
 //[PUT] [EDIT] Repositories
@@ -82,27 +55,16 @@ app.put("/repositories/:id", (request, response) => {
   const { id } = request.params;
   const { title, url, techs } = request.body;
 
-  //Validates if the url is in use
-  if(repositories.findIndex(repository => repository.url == url) > -1)
-    return response.status(400).json({error: true, message: "The requested url is already in use"});
-
   const repositoryIndex = repositories.findIndex(repository => repository.id === id);
   
-  const editRepository = {
-    id,
-    title,
-    url,
-    "likes": repositories[repositoryIndex].likes,
-    techs
-  };
-  
-  //Validates if the repository index was found
-  if(repositoryIndex < 0)
-    return response.status(400).json({error: true, message: "The reported repository was not found"});
+  if(repositoryIndex === -1)
+    return response.status(400).json();
 
-  repositories[repositoryIndex] = editRepository;
+  repositories[repositoryIndex].title = title;
+  repositories[repositoryIndex].url = url;
+  repositories[repositoryIndex].techs = techs;
 
-  return response.status(200).json(editRepository);
+  return response.json(repositories[repositoryIndex]);
 });
 
 //[DELETE] Repository
@@ -111,13 +73,12 @@ app.delete("/repositories/:id", (request, response) => {
 
   const repositoryIndex = repositories.findIndex(repository => repository.id === id);
   
-  //Validates if the repository index was found
   if(repositoryIndex < 0)
-    return response.status(400).json({error: true, message: "The reported repository was not found"});
+    return response.status(400).json();
 
   repositories.splice(repositoryIndex, 1);
 
-  return response.status(204).send();
+  return response.status(204).json();
 });
 
 //[POST] [LIKE] Repository
@@ -125,14 +86,13 @@ app.post("/repositories/:id/like", (request, response) => {
   const { id } = request.params;
 
   const repositoryIndex = repositories.findIndex(repository => repository.id === id);
-  
-  //Validates if the repository index was found
+
   if(repositoryIndex < 0)
-    return response.status(400).json({error: true, message: "The reported repository was not found"});
+    return response.status(400).json();
+    
+  repositories[repositoryIndex].likes += 1;
 
-  repositories[repositoryIndex].likes++;
-
-  return response.status(200).send(repositories[repositoryIndex]);
+  return response.json(repositories[repositoryIndex]);
 });
 
 module.exports = app;
